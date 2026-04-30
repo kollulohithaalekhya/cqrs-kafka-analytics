@@ -1,48 +1,50 @@
 import { pool } from "../db/db.js";
 
-// in-memory product cache (for JOIN)
+// KTable simulation
 const productCache = new Map();
 
 export const handleProductEvent = async (event) => {
   const product = event.payload;
-
-  // store in cache
   productCache.set(product.id, product);
 };
 
 export const handleOrderEvent = async (event) => {
   const order = event.payload;
 
-  const items = order.items;
-
-  for (const item of items) {
+  for (const item of order.items) {
     const product = productCache.get(item.productId);
 
-    if (!product) continue;
+    if (!product) {
+      console.log("⚠ Product not found, skipping...");
+      continue;
+    }
 
-    const totalAmount = item.quantity * item.price;
+    const totalValue = item.quantity * item.price;
 
-    // 🔹 PRODUCT SALES
+    // ✅ PRODUCT SALES (correct value)
     await pool.query(
       `INSERT INTO product_sales(product_id, total_sales)
        VALUES($1, $2)
        ON CONFLICT (product_id)
        DO UPDATE SET total_sales = product_sales.total_sales + $2`,
-      [item.productId, item.quantity]
+      [item.productId, totalValue]
     );
 
-    // 🔹 CATEGORY REVENUE
+    // ✅ CATEGORY REVENUE (dynamic category)
     await pool.query(
       `INSERT INTO category_revenue(category, total_revenue)
        VALUES($1, $2)
        ON CONFLICT (category)
        DO UPDATE SET total_revenue = category_revenue.total_revenue + $2`,
-      [product.category, totalAmount]
+      [product.category, totalValue]
     );
 
-    // 🔹 HOURLY SALES
-    const now = new Date();
-    const hourStart = new Date(now.setMinutes(0, 0, 0));
+    // ✅ WINDOW (use event timestamp)
+    const eventTime = new Date(event.timestamp);
+
+    const hourStart = new Date(eventTime);
+    hourStart.setMinutes(0, 0, 0);
+
     const hourEnd = new Date(hourStart.getTime() + 3600000);
 
     await pool.query(
@@ -50,7 +52,7 @@ export const handleOrderEvent = async (event) => {
        VALUES($1, $2, $3)
        ON CONFLICT (window_start, window_end)
        DO UPDATE SET total_sales = hourly_sales.total_sales + $3`,
-      [hourStart, hourEnd, totalAmount]
+      [hourStart, hourEnd, totalValue]
     );
   }
 };

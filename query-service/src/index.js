@@ -4,7 +4,9 @@ import { startConsumer } from "./kafka/consumer.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 
 const app = express();
+
 app.use("/api", analyticsRoutes);
+
 app.get("/", (req, res) => {
   res.send("Query Service Running");
 });
@@ -15,12 +17,13 @@ app.get("/health", (req, res) => {
     service: "query-service",
   });
 });
-const start = async () => {
-  await startConsumer();
 
-  app.listen(env.PORT, () => {
-    console.log(`Query Service running on ${env.PORT}`);
-  });
-};
+// ✅ START SERVER FIRST (IMPORTANT FIX)
+app.listen(env.PORT, () => {
+  console.log(`Query Service running on ${env.PORT}`);
+});
 
-start();
+// ✅ RUN CONSUMER IN BACKGROUND
+startConsumer().catch(err => {
+  console.error("❌ Kafka Consumer Error:", err.message);
+});

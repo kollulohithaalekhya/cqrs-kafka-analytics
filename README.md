@@ -4,97 +4,103 @@
 
 This project demonstrates a real-time event-driven microservices architecture using the CQRS (Command Query Responsibility Segregation) pattern with Apache Kafka and PostgreSQL.
 
-The system separates write operations (Command Service) from read/analytics operations (Query Service) and processes data asynchronously using Kafka.
+The system separates write operations (Command Service) from read/analytics operations (Query Service) and processes data asynchronously using Kafka with stream-processing concepts.
 
 ---
 
 ## Architecture
 
-```
-Client → Command Service → PostgreSQL
-                      ↓
-                   Kafka
-                      ↓
-                Query Service → Analytics DB Tables
-```
+Client → Command Service → PostgreSQL  
+                      ↓  
+                   Kafka  
+                      ↓  
+        Query Service (Stream Processing) → Analytics Tables  
 
-### Flow
+---
+
+## Flow
 
 1. User sends request to Command Service  
 2. Data is stored in PostgreSQL  
 3. Event is published to Kafka  
-4. Query Service consumes event  
-5. Analytics tables are updated in real-time  
+4. Query Service consumes event streams  
+5. Stream processing is applied:
+   - Product events → stored in in-memory state (KTable simulation)
+   - Order events → processed as stream (KStream simulation)
+   - Join is performed between product and order streams  
+6. Aggregations are computed and stored in analytics tables  
+
+---
+
+## Stream Processing Design
+
+The Query Service simulates Kafka Streams concepts using KafkaJS:
+
+- KTable → Product cache (in-memory state store)  
+- KStream → Order events stream  
+- Stream-Table Join → Order items joined with product data  
+- Aggregations:
+  - Product-wise sales  
+  - Category-wise revenue  
+  - Hourly windowed sales  
 
 ---
 
 ## Tech Stack
 
-| Technology              | Purpose          |
-| ----------------------- | ---------------- |
-| Node.js + Express       | Backend APIs     |
-| PostgreSQL              | Database         |
-| Apache Kafka            | Event streaming  |
-| KafkaJS                 | Kafka client     |
-| Docker & Docker Compose | Containerization |
-| Jest + Supertest        | Testing          |
+| Technology              | Purpose                  |
+| ----------------------- | ------------------------ |
+| Node.js + Express       | Backend APIs             |
+| PostgreSQL              | Database                 |
+| Apache Kafka            | Event streaming          |
+| KafkaJS                 | Kafka client             |
+| Docker & Docker Compose | Containerization         |
+| Jest + Supertest        | Testing                  |
 
 ---
 
 ## Project Structure
 
-```
 cqrs-kafka-analytics/
-│
-├── command-service/        # Handles write operations
-├── query-service/          # Handles analytics (read side)
-├── tests/                  # API test cases
-├── seeds/                  # DB initialization scripts
-├── docker-compose.yml      # Multi-container setup
-├── .env                    # Environment variables
-├── .env.example            # Sample env config
-└── README.md
-```
+
+command-service/ → Write side  
+query-service/ → Stream processing + analytics  
+tests/ → API tests  
+seeds/ → DB schema  
+docker-compose.yml  
+.env  
+.env.example  
+README.md  
 
 ---
-## 📊 Architecture Diagrams
-
-### System Architecture
-![Architecture](docs/architecture.png)
-
 
 ## Environment Variables
 
 ### `.env.example`
 
 ```env
-# PostgreSQL
 DB_HOST=db
 DB_PORT=5432
 POSTGRES_DB=analytics_db
 POSTGRES_USER=user
 POSTGRES_PASSWORD=password
 
-# Kafka
 KAFKA_BROKER=kafka:9092
 
-# Topics
 PRODUCT_TOPIC=product-events
 ORDER_TOPIC=order-events
 
-# App Ports
 COMMAND_SERVICE_PORT=8080
 QUERY_SERVICE_PORT=8081
 
-# Consumer Group
 KAFKA_GROUP_ID=query-service-group
-```
+````
 
 ---
 
-## Running the Project (Docker)
+## Running the Project
 
-### Step 1: Start all services
+### Start Services
 
 ```bash
 docker-compose up --build
@@ -102,7 +108,7 @@ docker-compose up --build
 
 ---
 
-### Step 2: Verify services
+### Verify Services
 
 ```bash
 curl http://localhost:8080/health
@@ -113,9 +119,9 @@ curl http://localhost:8081/health
 
 ## API Endpoints
 
-### Command Service (Write APIs)
+### Command Service
 
-#### Create Product
+Create Product
 
 ```bash
 curl -X POST http://localhost:8080/api/products \
@@ -123,9 +129,7 @@ curl -X POST http://localhost:8080/api/products \
 -d '{"name":"Phone","category":"electronics","price":500}'
 ```
 
----
-
-#### Create Order
+Create Order
 
 ```bash
 curl -X POST http://localhost:8080/api/orders \
@@ -135,25 +139,21 @@ curl -X POST http://localhost:8080/api/orders \
 
 ---
 
-### Query Service (Analytics APIs)
+### Query Service
 
-#### Product Sales
+Product Sales
 
 ```bash
 curl http://localhost:8081/api/analytics/product-sales
 ```
 
----
-
-#### Category Revenue
+Category Revenue
 
 ```bash
 curl http://localhost:8081/api/analytics/category-revenue
 ```
 
----
-
-#### Hourly Sales
+Hourly Sales
 
 ```bash
 curl http://localhost:8081/api/analytics/hourly-sales
@@ -163,54 +163,39 @@ curl http://localhost:8081/api/analytics/hourly-sales
 
 ## Database Schema
 
-### Core Tables
+Core Tables:
 
-* products  
-* orders  
+* products
+* orders
 
-### Analytics Tables
+Analytics Tables:
 
-* product_sales  
-* category_revenue  
-* hourly_sales  
+* product_sales
+* category_revenue
+* hourly_sales
 
 ---
 
-## Event Processing
+## Event Processing Logic
 
-When an order is created:
+OrderCreated event triggers:
 
-* Event is sent to Kafka (order-events)  
-* Query Service consumes event  
-* Updates:  
-  * Product-wise sales  
-  * Category-wise revenue  
-  * Hourly aggregation  
+* Product lookup from state store (KTable simulation)
+* Join with order items
+* Aggregation updates:
+
+  * Product sales (quantity × price)
+  * Category revenue
+  * Hourly windowed sales
 
 ---
 
 ## Testing
 
-### Install dependencies
-
 ```bash
 npm install
-```
-
----
-
-### Run tests
-
-```bash
 npm test
 ```
-
-### Tests cover:
-
-* Health endpoints  
-* Product creation  
-* Order creation  
-* Analytics APIs  
 
 ---
 
@@ -238,41 +223,39 @@ SELECT * FROM hourly_sales;
 
 ## Features Implemented
 
-* CQRS architecture  
-* Event-driven communication using Kafka  
-* Microservices design  
-* Real-time analytics processing  
-* Dockerized setup  
-* Retry handling for Kafka  
-* Health check APIs  
-* Testing using Jest & Supertest  
-* Environment-based configuration  
+* CQRS architecture
+* Event-driven microservices
+* Stream processing (KStream + KTable simulation)
+* Real-time aggregations
+* Join between streams
+* Windowed analytics
+* Dockerized deployment
+* Health checks and testing
 
 ---
 
 ## Real-World Use Cases
 
-This architecture is widely used in:
-
-* E-commerce platforms (Amazon, Flipkart)  
-* Food delivery apps (Swiggy, Zomato)  
-* Banking systems  
-* Real-time dashboards  
+* E-commerce analytics
+* Real-time dashboards
+* Financial transaction monitoring
+* Order processing systems
 
 ---
 
 ## Key Benefits
 
-* Loose coupling between services  
-* Scalable architecture  
-* Real-time analytics  
-* Fault tolerance with Kafka  
+* Scalable event-driven architecture
+* Real-time data processing
+* Decoupled services
+* Efficient analytics queries
 
 ---
 
 ## Demo
 
-Demo Video Link:  
-https://drive.google.com/file/d/1o0939_Umfka4Ilp5jAnoCPLKHgnUYDAj/view?usp=sharing
+[https://drive.google.com/file/d/1o0939_Umfka4Ilp5jAnoCPLKHgnUYDAj/view?usp=sharing](https://drive.google.com/file/d/1o0939_Umfka4Ilp5jAnoCPLKHgnUYDAj/view?usp=sharing)
+
+```
 
 ---

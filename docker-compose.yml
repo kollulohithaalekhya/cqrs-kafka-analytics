@@ -4,17 +4,14 @@ services:
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
-    hostname: zookeeper
     container_name: zookeeper
     ports:
       - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
     image: confluentinc/cp-kafka:7.3.0
-    hostname: kafka
     container_name: kafka
     depends_on:
       - zookeeper
@@ -24,9 +21,17 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
 
   db:
     image: postgres:14-alpine
@@ -53,7 +58,7 @@ services:
       db:
         condition: service_healthy
       kafka:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env
 
@@ -62,8 +67,10 @@ services:
     ports:
       - "8081:8081"
     depends_on:
+      db:
+        condition: service_healthy
       kafka:
-        condition: service_started
+        condition: service_healthy
     restart: always
     env_file:
       - .env
